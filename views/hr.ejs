@@ -1,0 +1,46 @@
+<section class="grid-2">
+  <div>
+    <h2>New Memo</h2>
+    <form action="/hr/memo" method="post" enctype="multipart/form-data" class="form-grid">
+      <label>Your Email (HR)</label>
+      <input type="email" name="hrEmail" required />
+      <label>Title</label>
+      <input type="text" name="title" required />
+
+      <label>Description</label>
+      <textarea name="description" rows="3" placeholder="Optional context..."></textarea>
+
+      <label>Assign to Manager (Email)</label>
+      <input type="email" name="managerEmail" required />
+
+      <label>Memo File (.docx)</label>
+      <input type="file" name="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required />
+
+      <button class="btn" type="submit">Send Memo</button>
+    </form>
+  </div>
+  <div>
+    <h2>Sent Memos</h2>
+    <% if (!memos.length) { %>
+      <p class="muted">No memos yet.</p>
+    <% } else { %>
+      <ul class="list">
+        <% memos.forEach(m => { %>
+          <li class="list-item">
+            <div>
+              <strong><%= m.title %></strong>
+              <div class="muted">To: <%= m.managerEmail %> • <%= new Date(m.createdAt).toLocaleString() %></div>
+              <% if (m.description) { %>
+                <div class="muted"><%= m.description %></div>
+              <% } %>
+            </div>
+            <div class="actions">
+              <a class="btn small" href="/memo/<%= m.id %>">View</a>
+              <span class="badge"><%= m.replies.length %> replies</span>
+            </div>
+          </li>
+        <% }) %>
+      </ul>
+    <% } %>
+  </div>
+</section>

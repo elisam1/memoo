@@ -1,0 +1,24 @@
+{
+  "name": "memoo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Simple HR-to-Manager memo web app (DOCX upload, reply flow)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "ejs": "^3.1.9",
+    "express": "^4.19.2",
+    "express-ejs-layouts": "^2.5.1",
+    "dotenv": "^16.4.5",
+    "nodemailer": "^6.9.13",
+    "mammoth": "^1.7.1",
+    "multer": "^1.4.5-lts.1",
+    "nanoid": "^5.0.6"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

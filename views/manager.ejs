@@ -1,0 +1,27 @@
+<section>
+  <h2>Manager Dashboard</h2>
+  <% if (!email) { %>
+    <p class="muted">Enter your email on the login page to view your memos.</p>
+    <a class="btn" href="/login">Go to Login</a>
+  <% } else { %>
+    <p>Signed in as <strong><%= email %></strong></p>
+    <% if (!memos.length) { %>
+      <p class="muted">No memos assigned to you yet.</p>
+    <% } else { %>
+      <ul class="list">
+        <% memos.forEach(m => { %>
+          <li class="list-item">
+            <div>
+              <strong><%= m.title %></strong>
+              <div class="muted">Received: <%= new Date(m.createdAt).toLocaleString() %></div>
+            </div>
+            <div class="actions">
+              <a class="btn small" href="/memo/<%= m.id %>?email=<%= encodeURIComponent(email) %>">Open</a>
+              <span class="badge"><%= m.replies.length %> replies</span>
+            </div>
+          </li>
+        <% }) %>
+      </ul>
+    <% } %>
+  <% } %>
+</section>

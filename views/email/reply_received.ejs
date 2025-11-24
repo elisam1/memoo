@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>Memo Reply</title>
+  </head>
+  <body style="margin:0;padding:0;background:#0f141a;font-family:Segoe UI,Roboto,Arial,sans-serif;color:#e6edf3;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0f141a;">
+      <tr>
+        <td align="center" style="padding:24px 12px;">
+          <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background:#161b22;border:1px solid #2a3240;border-radius:12px;overflow:hidden;">
+            <tr>
+              <td style="padding:20px;background:#0b0f14;border-bottom:1px solid #2a3240;">
+                <h1 style="margin:0;font-size:20px;color:#e6edf3;">Memoo</h1>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:24px;">
+                <h2 style="margin:0 0 8px 0;font-size:18px;color:#e6edf3;">Manager Replied</h2>
+                <p style="margin:0 0 12px 0;color:#9da7b1;font-size:14px;">A reply has been posted to your memo.</p>
+                <div style="background:#0b0f14;border:1px solid #2a3240;border-radius:8px;padding:16px;margin-bottom:16px;">
+                  <p style="margin:0;color:#e6edf3;"><strong>Memo:</strong> <%= memo.title %></p>
+                  <p style="margin:8px 0 0 0;color:#9da7b1;font-size:12px;">Reply time: <%= new Date(reply.createdAt).toLocaleString() %></p>
+                </div>
+                <div style="background:#0b0f14;border:1px solid #2a3240;border-radius:8px;padding:16px;margin-bottom:16px;">
+                  <p style="margin:0 0 8px 0;color:#e6edf3;"><strong>Message</strong></p>
+                  <p style="margin:0;color:#e6edf3;white-space:pre-wrap;">"<%= reply.message %>"</p>
+                </div>
+                <a href="<%= openUrl %>" style="display:inline-block;background:#2f81f7;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;">View Memo</a>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:16px;background:#0b0f14;border-top:1px solid #2a3240;color:#9da7b1;font-size:12px;" align="center">
+                <p style="margin:0;">Memoo • <a href="<%= baseUrl %>" style="color:#9da7b1;">Home</a></p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+  </html>

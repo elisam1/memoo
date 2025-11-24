@@ -1,0 +1,43 @@
+<% layout('layout') %>
+<section class="grid-2">
+  <div>
+    <h2><%= memo.title %></h2>
+    <% if (memo.description) { %>
+      <p class="muted"><%= memo.description %></p>
+    <% } %>
+    <div class="doc-preview">
+      <%- docHtml %>
+    </div>
+    <p class="muted">Source file: <%= memo.originalFileName %></p>
+  </div>
+  <div>
+    <h3>Replies</h3>
+    <% if (!memo.replies.length) { %>
+      <p class="muted">No replies yet.</p>
+    <% } else { %>
+      <ul class="list">
+        <% memo.replies.forEach(r => { %>
+          <li class="list-item">
+            <div>
+              <strong><%= r.sender === 'manager' ? 'Manager' : r.sender %></strong>
+              <div class="muted"><%= new Date(r.createdAt).toLocaleString() %></div>
+              <div><%= r.message %></div>
+            </div>
+          </li>
+        <% }) %>
+      </ul>
+    <% } %>
+
+    <% if (isManagerViewer) { %>
+      <h3>Send a Reply</h3>
+      <form action="/memo/<%= memo.id %>/reply" method="post" class="form-grid">
+        <input type="hidden" name="email" value="<%= viewerEmail %>" />
+        <label>Message</label>
+        <textarea name="message" rows="4" required></textarea>
+        <button class="btn" type="submit">Send Reply</button>
+      </form>
+    <% } else { %>
+      <p class="muted">Only the assigned manager (<%= memo.managerEmail %>) can send a reply.</p>
+    <% } %>
+  </div>
+</section>
