@@ -1,3 +1,24 @@
 {
-  "memos": []
+  "memos": [
+    {
+      "id": "0IgTTmwl",
+      "title": "Elikem",
+      "description": "GUHSKJSKH",
+      "managerEmail": "elikemagbanyo2003@gmail.com",
+      "hrEmail": "elikemagbanyo13@gmail.com",
+      "importance": "normal",
+      "status": "closed",
+      "filePath": "C:\\Users\\elike\\Documents\\trae_projects\\memoo\\uploads\\6e5538ddaf137ce32931caa3eac282a0",
+      "originalFileName": "Founders Voice Report.docx",
+      "createdAt": "2025-11-24T15:49:54.728Z",
+      "replies": [
+        {
+          "sender": "manager",
+          "email": "elikemagbanyo2003@gmail.com",
+          "message": "Thanks for the memo",
+          "createdAt": "2025-11-25T11:02:37.183Z"
+        }
+      ]
+    }
+  ]
 }

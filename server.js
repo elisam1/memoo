@@ -52,13 +52,18 @@ app.get('/login', (req, res) => {
 // HR dashboard
 app.get('/hr', (req, res) => {
   const db = store.get();
-  const memos = db.memos.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  res.render('hr', { title: 'HR Dashboard', memos });
+  const statusFilter = (req.query.status || '').trim().toLowerCase();
+  let memos = db.memos;
+  if (['open', 'waiting', 'closed'].includes(statusFilter)) {
+    memos = memos.filter(m => (m.status || 'open') === statusFilter);
+  }
+  memos = memos.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  res.render('hr', { title: 'HR Dashboard', memos, statusFilter });
 });
 
 app.post('/hr/memo', upload.single('file'), async (req, res) => {
   try {
-    const { title, description, managerEmail, hrEmail } = req.body;
+    const { title, description, managerEmail, hrEmail, importance } = req.body;
     if (!title || !managerEmail || !hrEmail || !req.file) {
       return res.status(400).send('HR Email, Title, Manager Email, and .docx file are required.');
     }
@@ -71,6 +76,8 @@ app.post('/hr/memo', upload.single('file'), async (req, res) => {
       description: description || '',
       managerEmail: managerEmail.trim().toLowerCase(),
       hrEmail: hrEmail.trim().toLowerCase(),
+      importance: (importance || 'normal').toLowerCase(),
+      status: 'open',
       filePath,
       originalFileName: req.file.originalname,
       createdAt: new Date().toISOString(),
@@ -94,18 +101,40 @@ app.post('/hr/memo', upload.single('file'), async (req, res) => {
   }
 });
 
+// HR updates memo status
+app.post('/hr/memo/:id/status', (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+  const allowed = ['open', 'waiting', 'closed'];
+  if (!allowed.includes((status || '').toLowerCase())) {
+    return res.status(400).send('Invalid status');
+  }
+  const db = store.get();
+  const memo = db.memos.find(m => m.id === id);
+  if (!memo) return res.status(404).send('Memo not found');
+  memo.status = status.toLowerCase();
+  store.save(db);
+  res.redirect('/hr');
+});
+
 // Manager dashboard — requires email query
 app.get('/manager', (req, res) => {
   const email = (req.query.email || '').trim().toLowerCase();
   const db = store.get();
-  const memos = email ? db.memos.filter(m => m.managerEmail === email) : [];
-  res.render('manager', { title: 'Manager Dashboard', email, memos });
+  const statusFilter = (req.query.status || '').trim().toLowerCase();
+  let memos = email ? db.memos.filter(m => m.managerEmail === email) : [];
+  if (['open', 'waiting', 'closed'].includes(statusFilter)) {
+    memos = memos.filter(m => (m.status || 'open') === statusFilter);
+  }
+  res.render('manager', { title: 'Manager Dashboard', email, memos, statusFilter });
 });
 
 // View memo and optionally reply (if accessed by manager with email)
 app.get('/memo/:id', async (req, res) => {
   const { id } = req.params;
   const viewerEmail = (req.query.email || '').trim().toLowerCase();
+  const prefillMessage = (req.query.prefill || '').toString();
+  const autoReply = (req.query.reply || '') === '1';
   const db = store.get();
   const memo = db.memos.find(m => m.id === id);
   if (!memo) return res.status(404).send('Memo not found');
@@ -120,7 +149,8 @@ app.get('/memo/:id', async (req, res) => {
   }
 
   const isManagerViewer = viewerEmail && viewerEmail === memo.managerEmail;
-  res.render('memo', { title: `Memo: ${memo.title}`, memo, docHtml: html, viewerEmail, isManagerViewer });
+  const isHRViewer = viewerEmail && viewerEmail === memo.hrEmail;
+  res.render('memo', { title: `Memo: ${memo.title}`, memo, docHtml: html, viewerEmail, isManagerViewer, isHRViewer, prefillMessage, autoReply });
 });
 
 app.post('/memo/:id/reply', (req, res) => {
@@ -129,26 +159,29 @@ app.post('/memo/:id/reply', (req, res) => {
   const db = store.get();
   const memo = db.memos.find(m => m.id === id);
   if (!memo) return res.status(404).send('Memo not found');
-  if (!email || email.trim().toLowerCase() !== memo.managerEmail) {
-    return res.status(400).send('Only the assigned manager can reply to this memo.');
-  }
+  const senderEmail = (email || '').trim().toLowerCase();
+  let senderRole = null;
+  if (senderEmail === memo.managerEmail) senderRole = 'manager';
+  if (senderEmail === memo.hrEmail) senderRole = 'hr';
+  if (!senderRole) return res.status(400).send('Only the assigned manager or HR can reply to this memo.');
   if (!message || !message.trim()) {
     return res.status(400).send('Reply message cannot be empty.');
   }
   memo.replies.push({
-    sender: 'manager',
-    email: memo.managerEmail,
+    sender: senderRole,
+    email: senderEmail,
     message: message.trim(),
     createdAt: new Date().toISOString()
   });
   store.save(db);
-  // Notify HR that a reply was received
+  // Notify the other party that a reply was received
   const reply = memo.replies[memo.replies.length - 1];
   const baseUrl = `${req.protocol}://${req.get('host')}`;
-  mailer.sendReplyReceived({ memo, reply, baseUrl }).catch(err => {
-    console.error('Email send error (reply received):', err);
+  mailer.sendReplyNotification({ memo, reply, baseUrl }).catch(err => {
+    console.error('Email send error (reply notification):', err);
   });
-  res.redirect(`/memo/${id}?email=${encodeURIComponent(memo.managerEmail)}`);
+  const redirectEmail = senderRole === 'manager' ? memo.managerEmail : memo.hrEmail;
+  res.redirect(`/memo/${id}?email=${encodeURIComponent(redirectEmail)}`);
 });
 
 const PORT = process.env.PORT || 3000;

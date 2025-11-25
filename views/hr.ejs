@@ -1,4 +1,5 @@
 <section class="grid-2">
+  <% const sf = typeof statusFilter !== 'undefined' ? statusFilter : '' %>
   <div>
     <h2>New Memo</h2>
     <form action="/hr/memo" method="post" enctype="multipart/form-data" class="form-grid">
@@ -13,6 +14,12 @@
       <label>Assign to Manager (Email)</label>
       <input type="email" name="managerEmail" required />
 
+      <label>Importance</label>
+      <select name="importance">
+        <option value="normal">Normal</option>
+        <option value="action">Action Required</option>
+      </select>
+
       <label>Memo File (.docx)</label>
       <input type="file" name="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required />
 
@@ -21,6 +28,18 @@
   </div>
   <div>
     <h2>Sent Memos</h2>
+    <form method="get" action="/hr" class="form-grid" style="grid-template-columns: 1fr auto;align-items:center;">
+      <div>
+        <label>Status Filter</label>
+        <select name="status">
+          <option value="" <%= !sf ? 'selected' : '' %>>All</option>
+          <option value="open" <%= sf==='open' ? 'selected' : '' %>>Open</option>
+          <option value="waiting" <%= sf==='waiting' ? 'selected' : '' %>>Waiting</option>
+          <option value="closed" <%= sf==='closed' ? 'selected' : '' %>>Closed</option>
+        </select>
+      </div>
+      <button class="btn" type="submit">Apply</button>
+    </form>
     <% if (!memos.length) { %>
       <p class="muted">No memos yet.</p>
     <% } else { %>
@@ -33,10 +52,25 @@
               <% if (m.description) { %>
                 <div class="muted"><%= m.description %></div>
               <% } %>
+              <div style="margin-top:6px;display:flex;gap:6px;align-items:center;">
+                <span class="badge"><%= (m.status || 'open').toUpperCase() %></span>
+                <% if ((m.importance || 'normal') === 'action') { %>
+                  <span class="badge" style="background:#d83a3a;">ACTION REQUIRED</span>
+                <% } %>
+              </div>
             </div>
             <div class="actions">
-              <a class="btn small" href="/memo/<%= m.id %>">View</a>
+              <a class="btn small" href="/memo/<%= m.id %>?email=<%= encodeURIComponent(m.hrEmail) %>">Open as HR</a>
+              <a class="btn small" href="/memo/<%= m.id %>">Open</a>
               <span class="badge"><%= m.replies.length %> replies</span>
+              <form action="/hr/memo/<%= m.id %>/status" method="post" style="display:inline-flex;gap:6px;margin-left:8px;">
+                <select name="status">
+                  <option value="open" <%= (m.status||'open')==='open'?'selected':'' %>>Open</option>
+                  <option value="waiting" <%= (m.status||'open')==='waiting'?'selected':'' %>>Waiting</option>
+                  <option value="closed" <%= (m.status||'open')==='closed'?'selected':'' %>>Closed</option>
+                </select>
+                <button class="btn small" type="submit">Update</button>
+              </form>
             </div>
           </li>
         <% }) %>

@@ -1,10 +1,24 @@
 <section>
+  <% const sf = typeof statusFilter !== 'undefined' ? statusFilter : '' %>
   <h2>Manager Dashboard</h2>
   <% if (!email) { %>
     <p class="muted">Enter your email on the login page to view your memos.</p>
     <a class="btn" href="/login">Go to Login</a>
   <% } else { %>
     <p>Signed in as <strong><%= email %></strong></p>
+    <form method="get" action="/manager" class="form-grid" style="grid-template-columns: 1fr auto;align-items:center;">
+      <input type="hidden" name="email" value="<%= email %>" />
+      <div>
+        <label>Status Filter</label>
+        <select name="status">
+          <option value="" <%= !sf ? 'selected' : '' %>>All</option>
+          <option value="open" <%= sf==='open' ? 'selected' : '' %>>Open</option>
+          <option value="waiting" <%= sf==='waiting' ? 'selected' : '' %>>Waiting</option>
+          <option value="closed" <%= sf==='closed' ? 'selected' : '' %>>Closed</option>
+        </select>
+      </div>
+      <button class="btn" type="submit">Apply</button>
+    </form>
     <% if (!memos.length) { %>
       <p class="muted">No memos assigned to you yet.</p>
     <% } else { %>
@@ -14,6 +28,12 @@
             <div>
               <strong><%= m.title %></strong>
               <div class="muted">Received: <%= new Date(m.createdAt).toLocaleString() %></div>
+              <div style="margin-top:6px;display:flex;gap:6px;align-items:center;">
+                <span class="badge"><%= (m.status || 'open').toUpperCase() %></span>
+                <% if ((m.importance || 'normal') === 'action') { %>
+                  <span class="badge" style="background:#d83a3a;">ACTION REQUIRED</span>
+                <% } %>
+              </div>
             </div>
             <div class="actions">
               <a class="btn small" href="/memo/<%= m.id %>?email=<%= encodeURIComponent(email) %>">Open</a>

@@ -1,10 +1,16 @@
-<% layout('layout') %>
+
 <section class="grid-2">
   <div>
     <h2><%= memo.title %></h2>
     <% if (memo.description) { %>
       <p class="muted"><%= memo.description %></p>
     <% } %>
+    <div style="margin:6px 0 12px 0;display:flex;gap:6px;align-items:center;">
+      <span class="badge"><%= (memo.status || 'open').toUpperCase() %></span>
+      <% if ((memo.importance || 'normal') === 'action') { %>
+        <span class="badge" style="background:#d83a3a;">ACTION REQUIRED</span>
+      <% } %>
+    </div>
     <div class="doc-preview">
       <%- docHtml %>
     </div>
@@ -33,11 +39,23 @@
       <form action="/memo/<%= memo.id %>/reply" method="post" class="form-grid">
         <input type="hidden" name="email" value="<%= viewerEmail %>" />
         <label>Message</label>
-        <textarea name="message" rows="4" required></textarea>
+        <textarea name="message" rows="4" required><%= prefillMessage || '' %></textarea>
         <button class="btn" type="submit">Send Reply</button>
       </form>
-    <% } else { %>
-      <p class="muted">Only the assigned manager (<%= memo.managerEmail %>) can send a reply.</p>
+    <% } %>
+
+    <% if (isHRViewer) { %>
+      <h3>Reply as HR</h3>
+      <form action="/memo/<%= memo.id %>/reply" method="post" class="form-grid">
+        <input type="hidden" name="email" value="<%= viewerEmail %>" />
+        <label>Message</label>
+        <textarea name="message" rows="4" required><%= prefillMessage || '' %></textarea>
+        <button class="btn" type="submit">Send Reply</button>
+      </form>
+    <% } %>
+
+    <% if (!isManagerViewer && !isHRViewer) { %>
+      <p class="muted">Only the assigned manager (<%= memo.managerEmail %>) or HR (<%= memo.hrEmail %>) can send a reply.</p>
     <% } %>
   </div>
 </section>
