@@ -28,3 +28,11 @@ input[type="text"], input[type="email"], input[type="file"], textarea { width: 1
 .badge { display: inline-block; background: #1f6feb; color: white; border-radius: 999px; padding: 4px 10px; font-size: 0.8rem; }
 .doc-preview { background: #0b0f14; border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
 @media (max-width: 760px) { .grid-2 { grid-template-columns: 1fr; } }
+
+/* Snackbar notifications */
+.snackbar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 9999; }
+.snackbar-item { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.35); transform: translateY(0); opacity: 1; transition: opacity .25s ease, transform .25s ease; }
+.snackbar-item.success { border-color: #2f81f7; }
+.snackbar-item.error { border-color: #d83a3a; }
+.snackbar-item.info { border-color: var(--border); }
+.snackbar-item.hide { opacity: 0; transform: translateY(10px); }

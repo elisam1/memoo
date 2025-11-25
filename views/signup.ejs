@@ -1,0 +1,70 @@
+<section class="card-grid">
+  <div class="card">
+    <h2>Signup</h2>
+
+    <% if (error) { %>
+      <p class="muted" style="color:red;"><%= error %></p>
+    <% } %>
+
+    <form id="signupForm" action="/signup" method="post" class="form-grid">
+      <label>Email</label>
+      <input type="email" name="email" required placeholder="you@company.com" />
+
+      <label>Password</label>
+      <input type="password" name="password" required placeholder="••••••••" />
+
+      <label>Role</label>
+      <select name="role" required>
+        <option value="manager">Manager</option>
+        <option value="hr">HR</option>
+        <option value="admin">Admin</option>
+      </select>
+
+      <button class="btn" type="submit">Create Account</button>
+    </form>
+  </div>
+</section>
+
+<script type="module">
+  import { getAuth, createUserWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js';
+
+  const form = document.getElementById('signupForm');
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = form.email.value.trim().toLowerCase();
+      const password = form.password.value;
+      const role = form.role.value.trim().toLowerCase();
+      try {
+        const auth = getAuth();
+        const cred = await createUserWithEmailAndPassword(auth, email, password);
+        const idToken = await cred.user.getIdToken(true);
+        const resp = await fetch('/sessionLogin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ idToken, role }).toString()
+        });
+        if (resp.redirected) {
+          notify('Account created', 'success');
+          window.location.href = resp.url;
+        } else if (resp.ok) {
+          notify('Account created', 'success');
+          window.location.href = '/home';
+        } else {
+          const text = await resp.text();
+          if (resp.status === 500) {
+            notify('Server auth not configured. Add Firebase service account in .env and restart.', 'error');
+          } else if (resp.status === 403) {
+            notify('Your email domain is not allowed. Add domain or set ALLOW_ANY_DOMAIN=true.', 'error');
+          } else if (resp.status === 401) {
+            notify('Invalid or expired token. Try again or check project mismatch.', 'error');
+          } else {
+            notify(text || 'Signup failed', 'error');
+          }
+        }
+      } catch (err) {
+        notify(err.message || 'Signup failed', 'error');
+      }
+    });
+  }
+</script>

@@ -1,0 +1,50 @@
+<section class="grid-2">
+  <div>
+    <h2>Domains</h2>
+    <% if (message) { %>
+      <p class="muted" style="color:<%= message.type==='error'?'#d83a3a':'#2f81f7' %>;"><%= message.text %></p>
+    <% } %>
+    <% if (!companies || companies.length === 0) { %>
+      <p class="muted">No domains yet. Add one on the right.</p>
+    <% } else { %>
+      <ul class="list">
+        <% companies.forEach(function(c){ %>
+          <li class="list-item">
+            <div>
+              <strong><%= c.name %></strong> • <%= c.domain %>
+              <div class="muted">SMTP: <%= c.smtp.host %>:<%= c.smtp.port %> <%= c.smtp.secure ? '(secure)' : '' %> as <%= c.smtp.auth.user %></div>
+            </div>
+            <div class="actions">
+              <form action="/admin/domains/<%= c.domain %>/delete" method="post">
+                <button class="btn small" type="submit">Delete</button>
+              </form>
+            </div>
+          </li>
+        <% }); %>
+      </ul>
+    <% } %>
+  </div>
+  <div>
+    <h2>Add Domain</h2>
+    <form action="/admin/domains/add" method="post" class="form-grid">
+      <label>Company Name</label>
+      <input type="text" name="name" required />
+      <label>Domain</label>
+      <input type="text" name="domain" required placeholder="gdcl.com" />
+      <label>SMTP Host</label>
+      <input type="text" name="smtp_host" required />
+      <label>SMTP Port</label>
+      <input type="text" name="smtp_port" required placeholder="587 or 465" />
+      <label>Secure (SSL/TLS)</label>
+      <select name="smtp_secure">
+        <option value="false" selected>No</option>
+        <option value="true">Yes</option>
+      </select>
+      <label>SMTP User</label>
+      <input type="text" name="smtp_user" required />
+      <label>SMTP Password</label>
+      <input type="password" name="smtp_pass" required />
+      <button class="btn" type="submit">Add Domain</button>
+    </form>
+  </div>
+</section>
