@@ -11,12 +11,65 @@
       <a class="brand" href="/">Memoo</a>
       <nav>
         <a href="/hr">HR</a>
-        <a href="/login">Login</a>
+        <% if (typeof user !== 'undefined' && user) { %>
+          <a href="/home">Home</a>
+          <a href="/manager">Manager</a>
+          <a href="/logout">Logout</a>
+          <span class="muted" style="margin-left:8px;">(<%= user.role %>: <%= user.email %>)</span>
+          <% if (user.role === 'admin') { %>
+            <a href="/admin/domains" style="margin-left:8px;">Admin</a>
+          <% } %>
+        <% } else { %>
+          <a href="/login">Login</a>
+          <a href="/signup">Signup</a>
+        <% } %>
       </nav>
     </header>
     <main class="container">
       <%- body %>
     </main>
     <footer class="site-footer">&copy; <%= new Date().getFullYear() %> Memoo</footer>
+    <script type="module">
+      import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js';
+      import { getAnalytics, isSupported } from 'https://www.gstatic.com/firebasejs/10.14.0/firebase-analytics.js';
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyAGzO4uXUPbNCAU46ZG8BUzYtvPBmOcW3M",
+        authDomain: "memoo-elikem.firebaseapp.com",
+        projectId: "memoo-elikem",
+        storageBucket: "memoo-elikem.firebasestorage.app",
+        messagingSenderId: "476684684666",
+        appId: "1:476684684666:web:936ea78f6d6554768c5ac3",
+        measurementId: "G-3CMFWKMQQG"
+      };
+
+      const app = initializeApp(firebaseConfig);
+      (async () => {
+        try {
+          if (await isSupported()) {
+            getAnalytics(app);
+            console.debug('Firebase Analytics initialized');
+          }
+        } catch (err) {
+          console.warn('Firebase Analytics not initialized:', err);
+        }
+      })();
+    </script>
+    <div id="snackbar" class="snackbar" aria-live="polite" aria-atomic="true"></div>
+    <script>
+      (function(){
+        const container = document.getElementById('snackbar');
+        window.notify = function(message, type='info', duration=4000){
+          if (!container) { try { alert(message); } catch(_){} return; }
+          const el = document.createElement('div');
+          el.className = `snackbar-item ${type}`;
+          el.textContent = message;
+          container.appendChild(el);
+          const hideAt = Math.max(1500, duration - 400);
+          setTimeout(() => el.classList.add('hide'), hideAt);
+          setTimeout(() => el.remove(), duration);
+        };
+      })();
+    </script>
   </body>
 </html>

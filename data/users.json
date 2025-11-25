@@ -1,0 +1,32 @@
+[
+  {
+    "email": "hr@example.com",
+    "password": "$2b$10$VbGshFZ/1Sx8l3sKnkEmeO3pF7PbsnYFZbU7t0CeZ6iCq/wgV7D2a",
+    "role": "hr"
+  },
+  {
+    "email": "manager@example.com",
+    "password": "$2b$10$KnqzVNNn4Zqtp6A0l7Pye.QFQcbGqCWXJc1qF6G8Ylq5jJkT.LH0i",
+    "role": "manager"
+  },
+  {
+    "email": "manager@company.com",
+    "password": "123456",
+    "role": "manager"
+  },
+  {
+    "email": "hr@company.com",
+    "password": "123456",
+    "role": "hr"
+  },
+  {
+    "email": "fahad@gmail.com",
+    "role": "manager",
+    "password": null
+  },
+  {
+    "email": "gahad@gmail.com",
+    "role": "hr",
+    "password": null
+  }
+]

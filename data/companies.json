@@ -1,0 +1,28 @@
+[
+  {
+    "name": "GDC Limted",
+    "domain": "gdcl.com",
+    "smtp": {
+      "host": "smtp.gdcl.com",
+      "port": 587,
+      "secure": false,
+      "auth": {
+        "user": "no-reply@gdcl.com",
+        "pass": "yourpassword"
+      }
+    }
+  },
+  {
+    "name": "Globex",
+    "domain": "gmail.com",
+    "smtp": {
+      "host": "smtp.gmail.com",
+      "port": 465,
+      "secure": true,
+      "auth": {
+        "user": "no-reply@gmail.com",
+        "pass": "anotherpassword"
+      }
+    }
+  }
+]

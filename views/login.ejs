@@ -1,24 +1,87 @@
+
+
 <section class="card-grid">
   <div class="card">
-    <h2>HR</h2>
-    <p>Create and send memos to managers.</p>
-    <a class="btn" href="/hr">Go to HR Dashboard</a>
-  </div>
-  <div class="card">
-    <h2>Manager</h2>
-    <p>View memos assigned to you and reply.</p>
-    <form action="/manager" method="get" class="form-grid">
+    <h2>Login</h2>
+
+    <% if (error) { %>
+      <p class="muted" style="color:red;"><%= error %></p>
+    <% } %>
+
+    <form id="loginForm" action="/login" method="post" class="form-grid">
       <label>Email</label>
-      <input type="email" name="email" required placeholder="manager@company.com" />
-      <button class="btn" type="submit">View My Memos</button>
+      <input type="email" name="email" required placeholder="you@example.com" />
+
+      <label>Password</label>
+      <input type="password" name="password" required placeholder="••••••••" />
+
+      <button class="btn" type="submit">Login</button>
     </form>
+    <p class="muted">No account? <a href="/signup">Signup</a></p>
+    <p class="muted"><a href="#" id="forgotPasswordLink">Forgot password?</a></p>
   </div>
-  <div class="card muted">
-    <h2>How it works</h2>
-    <ul>
-      <li>HR uploads a .docx memo and assigns a manager by email.</li>
-      <li>Manager logs in with their email to see assigned memos.</li>
-      <li>Manager opens memo, reads preview, and sends a reply.</li>
-    </ul>
-  </div>
-  </section>
+</section>
+
+<script type="module">
+  import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js';
+
+  const form = document.getElementById('loginForm');
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = form.email.value.trim().toLowerCase();
+      const password = form.password.value;
+      try {
+        const auth = getAuth();
+        const cred = await signInWithEmailAndPassword(auth, email, password);
+        const idToken = await cred.user.getIdToken(true);
+        const resp = await fetch('/sessionLogin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ idToken }).toString()
+        });
+        if (resp.redirected) {
+          notify('Logged in', 'success');
+          window.location.href = resp.url;
+        } else if (resp.ok) {
+          notify('Logged in', 'success');
+          window.location.href = '/home';
+        } else {
+          const text = await resp.text();
+          if (resp.status === 500) {
+            notify('Server auth not configured. Add Firebase service account in .env and restart.', 'error');
+          } else if (resp.status === 403) {
+            notify('Your email domain is not allowed. Add domain or set ALLOW_ANY_DOMAIN=true.', 'error');
+          } else if (resp.status === 401) {
+            notify('Invalid or expired token. Try again or check project mismatch.', 'error');
+          } else {
+            notify(text || 'Login failed', 'error');
+          }
+        }
+      } catch (err) {
+        notify(err.message || 'Login failed', 'error');
+      }
+    });
+  }
+
+  // Forgot Password handler
+  const forgotLink = document.getElementById('forgotPasswordLink');
+  if (forgotLink) {
+    forgotLink.addEventListener('click', async (e) => {
+      e.preventDefault();
+      try {
+        const emailInput = document.querySelector('#loginForm input[name="email"]');
+        const email = (emailInput?.value || '').trim().toLowerCase();
+        if (!email) {
+          notify('Enter your email above first.', 'info');
+          return;
+        }
+        const auth = getAuth();
+        await sendPasswordResetEmail(auth, email);
+        notify('Password reset email sent. Check your inbox.', 'success');
+      } catch (err) {
+        notify(err.message || 'Failed to send reset email', 'error');
+      }
+    });
+  }
+</script>
