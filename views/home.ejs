@@ -1,3 +1,4 @@
+
 <section class="card-grid">
   <div class="card">
     <h2>HR</h2>
@@ -7,8 +8,11 @@
   <div class="card">
     <h2>Manager</h2>
     <p>View memos assigned to you and reply.</p>
-    <a class="btn" href="/manager">Go to Manager Dashboard</a>
-    <p class="muted">Login required to access your memos.</p>
+    <form action="/manager" method="get" class="form-grid">
+      <label>Email</label>
+      <input type="email" name="email" required placeholder="manager@company.com" />
+      <button class="btn" type="submit">View My Memos</button>
+    </form>
   </div>
   <div class="card muted">
     <h2>How it works</h2>

@@ -36,6 +36,12 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'supersecretkey',
   resave: false,
   saveUninitialized: false,
+  name: 'memoo.sid',
+  cookie: {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: String(process.env.NODE_ENV).toLowerCase() === 'production',
+  }
 }));
 
 // Expose logged-in user to templates
@@ -47,6 +53,7 @@ app.use((req, res, next) => {
 // Multer setup for DOCX uploads
 const upload = multer({
   dest: path.join(__dirname, 'uploads'),
+  limits: { fileSize: parseInt(process.env.UPLOAD_MAX_BYTES || '10485760', 10) },
   fileFilter: (req, file, cb) => {
     const allowed = [
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
@@ -154,6 +161,24 @@ app.post('/sessionLogin', async (req, res) => {
       if (!requestedRole || !['hr', 'manager', 'admin'].includes(requestedRole)) {
         return res.status(400).send('Role is required (hr, manager, admin) for new accounts.');
       }
+
+      // Admin restrictions: allowlist and seat cap
+      if (requestedRole === 'admin') {
+        const ADMIN_MAX = parseInt(process.env.ADMIN_MAX || '2', 10);
+        const ADMIN_ALLOWLIST = String(process.env.ADMIN_ALLOWLIST || '')
+          .split(',')
+          .map(s => s.trim().toLowerCase())
+          .filter(Boolean);
+
+        const adminCount = users.filter(u => u.role === 'admin').length;
+        if (adminCount >= ADMIN_MAX) {
+          return res.status(403).send('Admin seats are full. Contact existing admin.');
+        }
+        if (ADMIN_ALLOWLIST.length && !ADMIN_ALLOWLIST.includes(email)) {
+          return res.status(403).send('This email is not authorized for admin role.');
+        }
+      }
+
       user = { email, role: requestedRole, password: null };
       users.push(user);
       store.saveUsers(users);
@@ -179,7 +204,7 @@ app.post('/sessionLogout', (req, res) => {
 // POST signup
 app.post('/signup', async (req, res) => {
   try {
-    let { email, password, role } = req.body;
+    let { email, password, role, passwordConfirm } = req.body;
     email = (email || '').trim().toLowerCase();
     role = (role || '').trim().toLowerCase();
 
@@ -191,6 +216,9 @@ app.post('/signup', async (req, res) => {
     }
     if (password.length < 6) {
       return res.render('signup', { title: 'Signup', error: 'Password must be at least 6 characters.' });
+    }
+    if ((passwordConfirm || '') !== password) {
+      return res.render('signup', { title: 'Signup', error: 'Passwords do not match.' });
     }
 
     // Domain enforcement unless ALLOW_ANY_DOMAIN=true
@@ -204,6 +232,23 @@ app.post('/signup', async (req, res) => {
     const existing = users.find(u => u.email === email);
     if (existing) {
       return res.render('signup', { title: 'Signup', error: 'An account already exists for this email.' });
+    }
+
+    // Admin restrictions: allowlist and seat cap
+    if (role === 'admin') {
+      const ADMIN_MAX = parseInt(process.env.ADMIN_MAX || '2', 10);
+      const ADMIN_ALLOWLIST = String(process.env.ADMIN_ALLOWLIST || '')
+        .split(',')
+        .map(s => s.trim().toLowerCase())
+        .filter(Boolean);
+
+      const adminCount = users.filter(u => u.role === 'admin').length;
+      if (adminCount >= ADMIN_MAX) {
+        return res.render('signup', { title: 'Signup', error: 'Admin seats are full. Contact existing admin.' });
+      }
+      if (ADMIN_ALLOWLIST.length && !ADMIN_ALLOWLIST.includes(email)) {
+        return res.render('signup', { title: 'Signup', error: 'This email is not authorized for admin role.' });
+      }
     }
 
     const hash = await bcrypt.hash(password, 10);
@@ -277,7 +322,8 @@ app.post('/hr/memo', requireLogin, upload.single('file'), async (req, res) => {
     const companyConfig = getCompanyByEmail(hrEmail);
     if (companyConfig) {
       try {
-        await mailer.sendMemoCreated({ memo, baseUrl: `${req.protocol}://${req.get('host')}`, companyConfig });
+        const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+        await mailer.sendMemoCreated({ memo, baseUrl, companyConfig });
       } catch (err) {
         console.error('Email send error:', err);
       }
@@ -368,10 +414,13 @@ app.post('/memo/:id/reply', requireLogin, async (req, res) => {
   const companyConfig = getCompanyByEmail(senderRole === 'hr' ? memo.managerEmail : memo.hrEmail);
   if (companyConfig) {
     try {
-      await mailer.sendReplyNotification({ memo, reply, baseUrl: `${req.protocol}://${req.get('host')}`, companyConfig });
+      const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+      await mailer.sendReplyNotification({ memo, reply, baseUrl, companyConfig });
     } catch (err) {
       console.error('Email send error (reply notification):', err);
     }
+  } else {
+    console.warn(`No SMTP config found for reply recipient. Notification email not sent.`);
   }
 
   const redirectEmail = senderRole === 'manager' ? memo.managerEmail : memo.hrEmail;
@@ -426,5 +475,77 @@ app.post('/admin/domains/:domain/delete', requireLogin, requireRole('admin'), (r
     console.error('Delete domain error:', err);
     const companies = loadCompanies();
     res.render('admin_domains', { title: 'Manage Domains', companies, message: { type: 'error', text: 'Failed to delete domain.' } });
+  }
+});
+
+// --- Admin: Admin users management ---
+app.get('/admin/users', requireLogin, requireRole('admin'), (req, res) => {
+  const users = store.getUsers();
+  const admins = users.filter(u => u.role === 'admin');
+  res.render('admin_users', { title: 'Manage Admins', admins, message: null, currentEmail: req.session.user.email, adminMax: parseInt(process.env.ADMIN_MAX || '2', 10) });
+});
+
+app.post('/admin/admins/add', requireLogin, requireRole('admin'), async (req, res) => {
+  try {
+    const email = (req.body.email || '').trim().toLowerCase();
+    if (!email || !email.includes('@')) {
+      const users = store.getUsers();
+      const admins = users.filter(u => u.role === 'admin');
+      return res.render('admin_users', { title: 'Manage Admins', admins, message: { type: 'error', text: 'Valid admin email is required.' }, currentEmail: req.session.user.email, adminMax: parseInt(process.env.ADMIN_MAX || '2', 10) });
+    }
+
+    const users = store.getUsers();
+    const admins = users.filter(u => u.role === 'admin');
+    const ADMIN_MAX = parseInt(process.env.ADMIN_MAX || '2', 10);
+    if (admins.length >= ADMIN_MAX) {
+      return res.render('admin_users', { title: 'Manage Admins', admins, message: { type: 'error', text: 'Admin seats are full.' }, currentEmail: req.session.user.email, adminMax: ADMIN_MAX });
+    }
+    if (users.find(u => u.email === email)) {
+      return res.render('admin_users', { title: 'Manage Admins', admins, message: { type: 'error', text: 'User already exists.' }, currentEmail: req.session.user.email, adminMax: ADMIN_MAX });
+    }
+
+    users.push({ email, role: 'admin', password: null });
+    store.saveUsers(users);
+    const updatedAdmins = users.filter(u => u.role === 'admin');
+    res.render('admin_users', { title: 'Manage Admins', admins: updatedAdmins, message: { type: 'success', text: 'Admin added.' }, currentEmail: req.session.user.email, adminMax: ADMIN_MAX });
+  } catch (err) {
+    console.error('Add admin error:', err);
+    const users = store.getUsers();
+    const admins = users.filter(u => u.role === 'admin');
+    res.render('admin_users', { title: 'Manage Admins', admins, message: { type: 'error', text: 'Failed to add admin.' }, currentEmail: req.session.user.email, adminMax: parseInt(process.env.ADMIN_MAX || '2', 10) });
+  }
+});
+
+app.post('/admin/admins/:email/delete', requireLogin, requireRole('admin'), (req, res) => {
+  try {
+    const target = (req.params.email || '').trim().toLowerCase();
+    let users = store.getUsers();
+    const admins = users.filter(u => u.role === 'admin');
+    const ADMIN_MAX = parseInt(process.env.ADMIN_MAX || '2', 10);
+
+    if (!target || !admins.find(a => a.email === target)) {
+      return res.render('admin_users', { title: 'Manage Admins', admins, message: { type: 'error', text: 'Admin not found.' }, currentEmail: req.session.user.email, adminMax: ADMIN_MAX });
+    }
+    // Prevent removing yourself and prevent going below 1 admin
+    if (target === req.session.user.email) {
+      return res.render('admin_users', { title: 'Manage Admins', admins, message: { type: 'error', text: 'You cannot remove your own admin account.' }, currentEmail: req.session.user.email, adminMax: ADMIN_MAX });
+    }
+    if (admins.length <= 1) {
+      return res.render('admin_users', { title: 'Manage Admins', admins, message: { type: 'error', text: 'At least one admin must remain.' }, currentEmail: req.session.user.email, adminMax: ADMIN_MAX });
+    }
+
+    const before = users.length;
+    users = users.filter(u => !(u.role === 'admin' && u.email === target));
+    if (users.length === before) {
+      return res.render('admin_users', { title: 'Manage Admins', admins, message: { type: 'error', text: 'Admin not found.' }, currentEmail: req.session.user.email, adminMax: ADMIN_MAX });
+    }
+    store.saveUsers(users);
+    const updatedAdmins = users.filter(u => u.role === 'admin');
+    res.render('admin_users', { title: 'Manage Admins', admins: updatedAdmins, message: { type: 'success', text: 'Admin removed.' }, currentEmail: req.session.user.email, adminMax: ADMIN_MAX });
+  } catch (err) {
+    console.error('Delete admin error:', err);
+    const users = store.getUsers();
+    const admins = users.filter(u => u.role === 'admin');
+    res.render('admin_users', { title: 'Manage Admins', admins, message: { type: 'error', text: 'Failed to remove admin.' }, currentEmail: req.session.user.email, adminMax: parseInt(process.env.ADMIN_MAX || '2', 10) });
   }
 });

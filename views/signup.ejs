@@ -13,12 +13,16 @@
       <label>Password</label>
       <input type="password" name="password" required placeholder="••••••••" />
 
+      <label>Confirm Password</label>
+      <input type="password" name="passwordConfirm" required placeholder="••••••••" />
+
       <label>Role</label>
       <select name="role" required>
         <option value="manager">Manager</option>
         <option value="hr">HR</option>
-        <option value="admin">Admin</option>
       </select>
+
+      <p class="muted">Admin accounts are restricted. Contact your admin for access.</p>
 
       <button class="btn" type="submit">Create Account</button>
     </form>
@@ -34,7 +38,16 @@
       e.preventDefault();
       const email = form.email.value.trim().toLowerCase();
       const password = form.password.value;
+      const passwordConfirm = form.passwordConfirm.value;
       const role = form.role.value.trim().toLowerCase();
+      if (!password || password.length < 6) {
+        notify('Password must be at least 6 characters.', 'error');
+        return;
+      }
+      if (password !== passwordConfirm) {
+        notify('Passwords do not match.', 'error');
+        return;
+      }
       try {
         const auth = getAuth();
         const cred = await createUserWithEmailAndPassword(auth, email, password);

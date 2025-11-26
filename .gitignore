@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Environment and secrets
+.env
+serviceAccount.json
+
+# Build, logs, cache
+npm-debug.log*
+*.log
+.cache/
+
+# Uploads and generated files
+uploads/
+
+# OS/editor
+.DS_Store
+.vscode/

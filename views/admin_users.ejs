@@ -1,0 +1,39 @@
+<section class="grid-2">
+  <div>
+    <h2>Admins</h2>
+    <% if (message) { %>
+      <p class="muted" style="color:<%= message.type==='error'?'#d83a3a':'#2f81f7' %>;"><%= message.text %></p>
+    <% } %>
+    <% if (!admins || admins.length === 0) { %>
+      <p class="muted">No admin accounts yet.</p>
+    <% } else { %>
+      <ul class="list">
+        <% admins.forEach(function(a){ %>
+          <li class="list-item">
+            <div>
+              <strong><%= a.email %></strong>
+              <% if (a.email === currentEmail) { %>
+                <span class="badge" style="margin-left:8px;">You</span>
+              <% } %>
+            </div>
+            <div class="actions">
+              <form action="/admin/admins/<%= a.email %>/delete" method="post">
+                <button class="btn small" type="submit" <%= a.email===currentEmail?'disabled':'' %>>Remove</button>
+              </form>
+            </div>
+          </li>
+        <% }); %>
+      </ul>
+    <% } %>
+  </div>
+  <div>
+    <h2>Add Admin</h2>
+    <p class="muted">Max admins: <strong><%= adminMax %></strong></p>
+    <form action="/admin/admins/add" method="post" class="form-grid">
+      <label>Admin Email</label>
+      <input type="email" name="email" required placeholder="admin@company.com" />
+      <button class="btn" type="submit">Add Admin</button>
+    </form>
+    <p class="muted" style="margin-top:8px;">New admin must log in using the same email via Firebase or Signup to activate access.</p>
+  </div>
+</section>
