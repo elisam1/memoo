@@ -8,6 +8,7 @@ const expressLayouts = require('express-ejs-layouts');
 const session = require('express-session');
 const bcrypt = require('bcrypt');
 require('dotenv').config();
+const pkg = require('./package.json');
 
 const store = require('./lib/store');
 const mailer = require('./lib/mailer');
@@ -98,13 +99,25 @@ app.get('/signup', (req, res) => {
 });
 
 // Health check for Firebase Admin initialization
-app.get('/health/firebase', (req, res) => {
+app.get('/health/firebase', requireRole('admin'), (req, res) => {
   try {
     const status = getFirebaseStatus();
     res.status(200).json({ ok: true, firebase: status });
   } catch (err) {
     res.status(500).json({ ok: false, error: String(err && err.message || err) });
   }
+});
+
+// General health endpoint
+app.get('/health', (req, res) => {
+  const port = parseInt(process.env.PORT || '8081', 10);
+  res.status(200).json({
+    ok: true,
+    version: pkg.version || null,
+    port,
+    uptimeSeconds: Math.round(process.uptime()),
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // POST login
