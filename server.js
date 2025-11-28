@@ -12,7 +12,7 @@ require('dotenv').config();
 const store = require('./lib/store');
 const mailer = require('./lib/mailer');
 const { getCompanyByEmail, loadCompanies, saveCompanies } = require('./lib/companyHelper');
-const { verifyIdToken } = require('./lib/firebaseAdmin');
+const { verifyIdToken, getStatus: getFirebaseStatus } = require('./lib/firebaseAdmin');
 
 // Ensure needed directories exist
 const ensureDir = (p) => {
@@ -95,6 +95,16 @@ app.get('/login', (req, res) => {
 // GET signup page
 app.get('/signup', (req, res) => {
   res.render('signup', { title: 'Signup', error: null });
+});
+
+// Health check for Firebase Admin initialization
+app.get('/health/firebase', (req, res) => {
+  try {
+    const status = getFirebaseStatus();
+    res.status(200).json({ ok: true, firebase: status });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err && err.message || err) });
+  }
 });
 
 // POST login
