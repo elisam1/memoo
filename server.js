@@ -8,11 +8,12 @@ const expressLayouts = require('express-ejs-layouts');
 const session = require('express-session');
 const bcrypt = require('bcrypt');
 require('dotenv').config();
+const pkg = require('./package.json');
 
 const store = require('./lib/store');
 const mailer = require('./lib/mailer');
 const { getCompanyByEmail, loadCompanies, saveCompanies } = require('./lib/companyHelper');
-const { verifyIdToken } = require('./lib/firebaseAdmin');
+const { verifyIdToken, getStatus: getFirebaseStatus } = require('./lib/firebaseAdmin');
 
 // Ensure needed directories exist
 const ensureDir = (p) => {
@@ -95,6 +96,28 @@ app.get('/login', (req, res) => {
 // GET signup page
 app.get('/signup', (req, res) => {
   res.render('signup', { title: 'Signup', error: null });
+});
+
+// Health check for Firebase Admin initialization
+app.get('/health/firebase', requireRole('admin'), (req, res) => {
+  try {
+    const status = getFirebaseStatus();
+    res.status(200).json({ ok: true, firebase: status });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err && err.message || err) });
+  }
+});
+
+// General health endpoint
+app.get('/health', (req, res) => {
+  const port = parseInt(process.env.PORT || '8081', 10);
+  res.status(200).json({
+    ok: true,
+    version: pkg.version || null,
+    port,
+    uptimeSeconds: Math.round(process.uptime()),
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // POST login

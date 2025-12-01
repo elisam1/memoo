@@ -35,6 +35,20 @@ To let managers connect to your PC:
 
 Managers can now visit `http://<your-ip>:8081/` to log in and view memos.
 
+## Configure Firebase Admin (optional)
+If you use Firebase for server-side auth verification, set the service account securely:
+
+1. Create a folder outside the project, e.g., `C:\memoo_keys`.
+2. Save your Firebase service account JSON file there (e.g., `C:\memoo_keys\serviceAccount.json`).
+3. Choose one of the following and restart `start_memoo.cmd`:
+   - In `.env`: `FIREBASE_SERVICE_ACCOUNT_FILE=../memoo_keys/serviceAccount.json`
+   - Or set a user env var: `GOOGLE_APPLICATION_CREDENTIALS=C:\memoo_keys\serviceAccount.json`
+
+Notes:
+- Do not commit service account files to Git; they are secrets.
+- If a key was ever committed, rotate it in Google Cloud: create a new key and delete the old one.
+- If not configured, Memoo still runs; token verification endpoints will be disabled.
+
 ## Tips
 - Keep `ALLOW_ANY_DOMAIN=true` in development (default) so managers can sign up regardless of email domain.
 - For stronger session security, set `.env`:
@@ -52,4 +66,3 @@ Managers can now visit `http://<your-ip>:8081/` to log in and view memos.
 - Links show `localhost` in emails: set `BASE_URL` correctly and restart.
 - Emails not sending: check SMTP in `data\companies.json` and set `MAIL_FROM`.
 - Managers cannot connect: create the firewall rule for TCP 8081 and ensure you share the correct `BASE_URL`.
-
