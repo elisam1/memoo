@@ -14,7 +14,10 @@
     <div class="doc-preview">
       <%- docHtml %>
     </div>
-    <p class="muted">Source file: <%= memo.originalFileName %></p>
+    <div class="actions" style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+      <a class="btn small" href="/memo/<%= memo.id %>/download">Download .docx</a>
+      <span class="muted">Source: <%= memo.originalFileName %></span>
+    </div>
   </div>
   <div>
     <h3>Replies</h3>

@@ -2,7 +2,7 @@
   <div>
     <h2>Domains</h2>
     <% if (message) { %>
-      <p class="muted" style="color:<%= message.type==='error'?'#d83a3a':'#2f81f7' %>;"><%= message.text %></p>
+      <p class="muted <%= message.type==='error' ? 'msg-error' : 'msg-info' %>"><%= message.text %></p>
     <% } %>
     <% if (!companies || companies.length === 0) { %>
       <p class="muted">No domains yet. Add one on the right.</p>

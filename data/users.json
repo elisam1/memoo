@@ -28,5 +28,35 @@
     "email": "gahad@gmail.com",
     "role": "hr",
     "password": null
+  },
+  {
+    "email": "elikemagbanyo2003@gmail.com",
+    "role": "manager",
+    "password": null
+  },
+  {
+    "email": "elikemagbanyo2004@gmail.com",
+    "role": "hr",
+    "password": null
+  },
+  {
+    "email": "hr@gmail.com",
+    "role": "hr",
+    "password": null
+  },
+  {
+    "email": "hr1@gmail.com",
+    "role": "hr",
+    "password": null
+  },
+  {
+    "email": "elikemagbanyo13@gmail.com",
+    "role": "admin",
+    "password": null
+  },
+  {
+    "email": "manager@gmail.com",
+    "role": "manager",
+    "password": null
   }
 ]

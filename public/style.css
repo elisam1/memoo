@@ -36,3 +36,6 @@ input[type="text"], input[type="email"], input[type="file"], textarea { width: 1
 .snackbar-item.error { border-color: #d83a3a; }
 .snackbar-item.info { border-color: var(--border); }
 .snackbar-item.hide { opacity: 0; transform: translateY(10px); }
+/* Message colors for admin pages */
+.msg-error { color: #d83a3a; }
+.msg-info { color: #2f81f7; }

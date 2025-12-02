@@ -1,8 +1,10 @@
 <section class="grid-2">
+  <% admins = Array.isArray(admins) ? admins : []; %>
+  <% currentEmail = typeof currentEmail === 'string' ? currentEmail : '' ; %>
   <div>
     <h2>Admins</h2>
     <% if (message) { %>
-      <p class="muted" style="color:<%= message.type==='error'?'#d83a3a':'#2f81f7' %>;"><%= message.text %></p>
+      <p class="muted <%= message.type==='error' ? 'msg-error' : 'msg-info' %>"><%= message.text %></p>
     <% } %>
     <% if (!admins || admins.length === 0) { %>
       <p class="muted">No admin accounts yet.</p>
@@ -35,5 +37,19 @@
       <button class="btn" type="submit">Add Admin</button>
     </form>
     <p class="muted" style="margin-top:8px;">New admin must log in using the same email via Firebase or Signup to activate access.</p>
+    <div class="card" style="margin-top:16px;">
+      <h3>Danger Zone</h3>
+      <p class="muted">Clear all memos and users. Keeps the current admin account. Purges uploads.</p>
+      <form action="/admin/reset" method="post" onsubmit="return confirm('Are you sure? This will delete ALL memos and users and purge uploads. The current admin will be retained.');">
+        <button class="btn" type="submit" style="background:#d83a3a;">Reset Data</button>
+      </form>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <h3>Danger Zone (Full Wipe)</h3>
+      <p class="muted">Delete ALL users and memos, purge uploads, and log you out.</p>
+      <form action="/admin/reset-all" method="post" onsubmit="return confirm('This will wipe ALL users and memos, purge uploads, and log you out. Continue?');">
+        <button class="btn" type="submit" style="background:#d83a3a;">Reset All Data</button>
+      </form>
+    </div>
   </div>
 </section>

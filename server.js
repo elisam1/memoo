@@ -22,6 +22,63 @@ ensureDir(path.join(__dirname, 'uploads'));
 ensureDir(path.join(__dirname, 'public'));
 ensureDir(path.join(__dirname, 'data'));
 
+const resolveUploadPath = (p) => {
+  if (!p) return null;
+  const uploadsDir = path.join(__dirname, 'uploads');
+  try {
+    if (path.isAbsolute(p)) {
+      if (fs.existsSync(p)) return p;
+      const fb = path.join(uploadsDir, path.basename(p));
+      if (fs.existsSync(fb)) return fb;
+      return null;
+    }
+    const abs = path.join(__dirname, p);
+    if (fs.existsSync(abs)) return abs;
+    const alt = path.join(uploadsDir, path.basename(p));
+    if (fs.existsSync(alt)) return alt;
+  } catch (_) {}
+  return null;
+};
+
+const backfillMemoFiles = () => {
+  try {
+    const db = store.get();
+    let changed = false;
+    db.memos.forEach((m) => {
+      if (!m.file && m.filePath) {
+        const abs = resolveUploadPath(m.filePath);
+        if (abs && fs.existsSync(abs)) {
+          try {
+            const buf = fs.readFileSync(abs);
+            m.file = {
+              base64: buf.toString('base64'),
+              mime: (function(){
+                const ext = path.extname(abs).toLowerCase();
+                if (ext === '.pdf') return 'application/pdf';
+                return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+              })(),
+              filename: m.originalFileName || path.basename(abs),
+              size: buf.length
+            };
+            changed = true;
+          } catch (_) {}
+        }
+      }
+    });
+    if (changed) store.save(db);
+  } catch (_) {}
+};
+
+backfillMemoFiles();
+
+const purgeUploads = () => {
+  try {
+    const dir = path.join(__dirname, 'uploads');
+    if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
+  } catch (_) {}
+  ensureDir(path.join(__dirname, 'uploads'));
+};
+
 // App setup
 const app = express();
 app.set('view engine', 'ejs');
@@ -56,12 +113,14 @@ const upload = multer({
   limits: { fileSize: parseInt(process.env.UPLOAD_MAX_BYTES || '10485760', 10) },
   fileFilter: (req, file, cb) => {
     const allowed = [
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/pdf'
     ];
-    if (allowed.includes(file.mimetype) || file.originalname.toLowerCase().endsWith('.docx')) {
+    const name = file.originalname.toLowerCase();
+    if (allowed.includes(file.mimetype) || name.endsWith('.docx') || name.endsWith('.pdf')) {
       cb(null, true);
     } else {
-      cb(new Error('Only .docx files are allowed'));
+      cb(new Error('Only .docx or .pdf files are allowed'));
     }
   }
 });
@@ -156,28 +215,29 @@ app.post('/sessionLogin', async (req, res) => {
     const users = store.getUsers();
     let user = users.find(u => u.email === email);
 
-    if (!user) {
-      // Signup path: require a valid role to create user
-      if (!requestedRole || !['hr', 'manager', 'admin'].includes(requestedRole)) {
-        return res.status(400).send('Role is required (hr, manager, admin) for new accounts.');
-      }
+  if (!user) {
+    // Signup path: require a valid role to create user
+    if (!requestedRole || !['hr', 'manager', 'admin'].includes(requestedRole)) {
+      return res.status(400).send('Role is required (hr, manager, admin) for new accounts.');
+    }
 
-      // Admin restrictions: allowlist and seat cap
-      if (requestedRole === 'admin') {
-        const ADMIN_MAX = parseInt(process.env.ADMIN_MAX || '2', 10);
-        const ADMIN_ALLOWLIST = String(process.env.ADMIN_ALLOWLIST || '')
-          .split(',')
-          .map(s => s.trim().toLowerCase())
-          .filter(Boolean);
+    // Admin restrictions: allowlist and seat cap
+    if (requestedRole === 'admin') {
+      const ADMIN_MAX = parseInt(process.env.ADMIN_MAX || '2', 10);
+      const ADMIN_ALLOWLIST_DISABLED = String(process.env.ADMIN_ALLOWLIST_DISABLE || 'true').toLowerCase() === 'true';
+      const ADMIN_ALLOWLIST = ADMIN_ALLOWLIST_DISABLED ? [] : String(process.env.ADMIN_ALLOWLIST || '')
+        .split(',')
+        .map(s => s.trim().toLowerCase())
+        .filter(Boolean);
 
-        const adminCount = users.filter(u => u.role === 'admin').length;
-        if (adminCount >= ADMIN_MAX) {
-          return res.status(403).send('Admin seats are full. Contact existing admin.');
-        }
-        if (ADMIN_ALLOWLIST.length && !ADMIN_ALLOWLIST.includes(email)) {
-          return res.status(403).send('This email is not authorized for admin role.');
-        }
+      const adminCount = users.filter(u => u.role === 'admin').length;
+      if (adminCount >= ADMIN_MAX) {
+        return res.status(403).send('Admin seats are full. Contact existing admin.');
       }
+      if (ADMIN_ALLOWLIST.length && !ADMIN_ALLOWLIST.includes(email)) {
+        return res.status(403).send('This email is not authorized for admin role.');
+      }
+    }
 
       user = { email, role: requestedRole, password: null };
       users.push(user);
@@ -237,7 +297,8 @@ app.post('/signup', async (req, res) => {
     // Admin restrictions: allowlist and seat cap
     if (role === 'admin') {
       const ADMIN_MAX = parseInt(process.env.ADMIN_MAX || '2', 10);
-      const ADMIN_ALLOWLIST = String(process.env.ADMIN_ALLOWLIST || '')
+      const ADMIN_ALLOWLIST_DISABLED = String(process.env.ADMIN_ALLOWLIST_DISABLE || 'true').toLowerCase() === 'true';
+      const ADMIN_ALLOWLIST = ADMIN_ALLOWLIST_DISABLED ? [] : String(process.env.ADMIN_ALLOWLIST || '')
         .split(',')
         .map(s => s.trim().toLowerCase())
         .filter(Boolean);
@@ -281,7 +342,7 @@ app.get('/hr', requireLogin, (req, res) => {
 
   const db = store.get();
   const statusFilter = (req.query.status || '').trim().toLowerCase();
-  let memos = db.memos;
+  let memos = db.memos.filter((m) => m.hrEmail === req.session.user.email);
   if (['open', 'waiting', 'closed'].includes(statusFilter)) {
     memos = memos.filter((m) => (m.status || 'open') === statusFilter);
   }
@@ -300,7 +361,7 @@ app.post('/hr/memo', requireLogin, upload.single('file'), async (req, res) => {
     }
 
     const id = nanoid(8);
-    const filePath = req.file.path;
+    const filePath = path.join('uploads', req.file.filename);
     const memo = {
       id,
       title,
@@ -314,6 +375,16 @@ app.post('/hr/memo', requireLogin, upload.single('file'), async (req, res) => {
       createdAt: new Date().toISOString(),
       replies: []
     };
+    try {
+      const absUpload = path.join(__dirname, 'uploads', req.file.filename);
+      const buf = fs.readFileSync(absUpload);
+      memo.file = {
+        base64: buf.toString('base64'),
+        mime: req.file.mimetype || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        filename: memo.originalFileName,
+        size: buf.length
+      };
+    } catch (_) {}
 
     const db = store.get();
     db.memos.push(memo);
@@ -378,19 +449,91 @@ app.get('/memo/:id', requireLogin, async (req, res) => {
   const db = store.get();
   const memo = db.memos.find((m) => m.id === id);
   if (!memo) return res.status(404).send('Memo not found');
+  if (viewerEmail !== memo.managerEmail && viewerEmail !== memo.hrEmail) {
+    return res.status(403).render('forbidden', { title: 'Access Restricted', roleRequired: null, user: req.session.user });
+  }
 
   let html = '<p><em>Unable to render document preview.</em></p>';
-  try {
-    const buffer = fs.readFileSync(memo.filePath);
-    const result = await mammoth.convertToHtml({ buffer });
-    html = result.value || html;
-  } catch (err) {
-    console.error('Mammoth conversion error:', err);
+  const abs = resolveUploadPath(memo.filePath);
+  const mimeGuess = memo.file?.mime || (function(){
+    const name = (memo.originalFileName || memo.filePath || '').toLowerCase();
+    if (name.endsWith('.pdf')) return 'application/pdf';
+    return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  })();
+  if (mimeGuess === 'application/pdf') {
+    const src = `/memo/${id}/file`;
+    html = `<iframe src="${src}" title="PDF preview" style="width:100%;height:600px;border:0"></iframe>`;
+  } else {
+    try {
+      if (abs) {
+        const buffer = fs.readFileSync(abs);
+        const result = await mammoth.convertToHtml({ buffer });
+        html = result.value || html;
+      }
+    } catch (err) {
+      console.error('Mammoth conversion error:', err);
+    }
+    if (!abs && memo.file && memo.file.base64) {
+      try {
+        const buffer = Buffer.from(memo.file.base64, 'base64');
+        const result = await mammoth.convertToHtml({ buffer });
+        html = result.value || html;
+      } catch (_) {}
+    }
   }
 
   const isManagerViewer = viewerEmail === memo.managerEmail;
   const isHRViewer = viewerEmail === memo.hrEmail;
   res.render('memo', { title: `Memo: ${memo.title}`, memo, docHtml: html, viewerEmail, isManagerViewer, isHRViewer, prefillMessage });
+});
+
+app.get('/memo/:id/download', requireLogin, (req, res) => {
+  const { id } = req.params;
+  const viewerEmail = req.session.user.email;
+  const db = store.get();
+  const memo = db.memos.find((m) => m.id === id);
+  if (!memo) return res.status(404).send('Memo not found');
+  if (viewerEmail !== memo.managerEmail && viewerEmail !== memo.hrEmail) {
+    return res.status(403).render('forbidden', { title: 'Access Restricted', roleRequired: null, user: req.session.user });
+  }
+  const abs = resolveUploadPath(memo.filePath);
+  if (abs && fs.existsSync(abs)) {
+    return res.download(abs, memo.originalFileName);
+  }
+  if (memo.file && memo.file.base64) {
+    const buffer = Buffer.from(memo.file.base64, 'base64');
+    res.setHeader('Content-Type', memo.file.mime || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename="${memo.file.filename || memo.originalFileName || 'memo.docx'}"`);
+    return res.end(buffer);
+  }
+  return res.status(404).send('Source file not found');
+});
+
+app.get('/memo/:id/file', requireLogin, (req, res) => {
+  const { id } = req.params;
+  const viewerEmail = req.session.user.email;
+  const db = store.get();
+  const memo = db.memos.find((m) => m.id === id);
+  if (!memo) return res.status(404).send('Memo not found');
+  if (viewerEmail !== memo.managerEmail && viewerEmail !== memo.hrEmail) {
+    return res.status(403).render('forbidden', { title: 'Access Restricted', roleRequired: null, user: req.session.user });
+  }
+  const abs = resolveUploadPath(memo.filePath);
+  if (abs && fs.existsSync(abs)) {
+    const stream = fs.createReadStream(abs);
+    const ext = path.extname(abs).toLowerCase();
+    const mime = memo.file?.mime || (ext === '.pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Disposition', `inline; filename="${memo.originalFileName || path.basename(abs)}"`);
+    return stream.pipe(res);
+  }
+  if (memo.file && memo.file.base64) {
+    const buffer = Buffer.from(memo.file.base64, 'base64');
+    res.setHeader('Content-Type', memo.file.mime || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${memo.file.filename || memo.originalFileName || 'memo'}"`);
+    return res.end(buffer);
+  }
+  return res.status(404).send('Source file not found');
 });
 
 // Reply to Memo
@@ -547,5 +690,42 @@ app.post('/admin/admins/:email/delete', requireLogin, requireRole('admin'), (req
     const users = store.getUsers();
     const admins = users.filter(u => u.role === 'admin');
     res.render('admin_users', { title: 'Manage Admins', admins, message: { type: 'error', text: 'Failed to remove admin.' }, currentEmail: req.session.user.email, adminMax: parseInt(process.env.ADMIN_MAX || '2', 10) });
+  }
+});
+
+app.post('/admin/reset', requireLogin, requireRole('admin'), (req, res) => {
+  try {
+    const currentEmail = (req.session.user?.email || '').trim().toLowerCase();
+    const users = store.getUsers();
+    const keep = users.find(u => u.email === currentEmail && u.role === 'admin');
+    const kept = keep ? [keep] : [];
+
+    // Clear memos and users (keep current admin if present)
+    store.save({ memos: [] });
+    store.saveUsers(kept);
+    purgeUploads();
+
+    const admins = kept;
+    res.render('admin_users', { title: 'Manage Admins', admins, message: { type: 'success', text: 'All memos and users cleared. Current admin retained. Uploads purged.' }, currentEmail: currentEmail, adminMax: parseInt(process.env.ADMIN_MAX || '2', 10) });
+  } catch (err) {
+    console.error('Reset error:', err);
+    const users = store.getUsers();
+    const admins = users.filter(u => u.role === 'admin');
+    res.render('admin_users', { title: 'Manage Admins', admins, message: { type: 'error', text: 'Failed to reset data.' }, currentEmail: req.session.user.email, adminMax: parseInt(process.env.ADMIN_MAX || '2', 10) });
+  }
+});
+
+app.post('/admin/reset-all', requireLogin, requireRole('admin'), (req, res) => {
+  try {
+    store.save({ memos: [] });
+    store.saveUsers([]);
+    purgeUploads();
+  } catch (err) {
+    console.error('Reset-all error:', err);
+  }
+  try {
+    req.session.destroy(() => res.redirect('/login'));
+  } catch (_) {
+    res.redirect('/login');
   }
 });
