@@ -71,6 +71,9 @@
                 </select>
                 <button class="btn small" type="submit">Update</button>
               </form>
+              <% if (typeof baseUrl !== 'undefined' && baseUrl) { %>
+                <button class="btn small" type="button" onclick="copyManagerLink('<%= baseUrl %>/memo/<%= m.id %>?email=<%= encodeURIComponent(m.managerEmail) %>')">Copy Manager Link</button>
+              <% } %>
             </div>
           </li>
         <% }) %>
@@ -78,3 +81,18 @@
     <% } %>
   </div>
 </section>
+<script>
+  function copyManagerLink(url){
+    try {
+      navigator.clipboard.writeText(url).then(function(){
+        if (window.notify) notify('Link copied', 'success');
+      }, function(){
+        const t = document.createElement('textarea');
+        t.value = url; document.body.appendChild(t); t.select(); try { document.execCommand('copy'); } catch(_){} t.remove();
+        if (window.notify) notify('Link copied', 'success');
+      });
+    } catch (_) {
+      if (window.notify) notify('Failed to copy link', 'error');
+    }
+  }
+</script>

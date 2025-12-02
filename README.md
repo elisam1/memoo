@@ -17,6 +17,7 @@ Simple HR-to-Manager memo web app featuring DOCX/PDF uploads, email notification
 - Session auth via `express-session` and `bcrypt`
 - File upload via `multer`; DOCX → HTML via `mammoth`; PDF inline viewing
 - Email via `nodemailer` with per-domain SMTP settings
+- Optional email via Firebase Extensions (Trigger Email) writing to Firestore `mail` collection
 - Firebase Admin (optional) for verifying client auth tokens; Firebase client for auth and analytics
 
 ## Project Structure
@@ -75,6 +76,7 @@ Copy `.env.example` to `.env` and set as needed:
   - `FIREBASE_SERVICE_ACCOUNT_JSON` — raw JSON string
   - `FIREBASE_SERVICE_ACCOUNT_BASE64` — base64-encoded JSON
   - `FIREBASE_PROJECT_ID` — override project id if needed
+  - `FIREBASE_EMAIL_ENABLED` — `true`/`false` to send email via Firebase Trigger Email extension
 
 Note: SMTP host/user/pass are managed per company domain via Admin UI and `data/companies.json`, not via `.env`.
 
@@ -95,6 +97,12 @@ Admins manage allowed email domains and SMTP credentials:
   }
   ```
 - Emails use `MAIL_FROM` as the envelope sender and set `replyTo` to the actual human sender (HR or Manager) for conversation continuity.
+
+Alternatively, enable Firebase Trigger Email:
+- Install Firebase Extensions: Trigger Email in your Firebase project
+- Configure provider (SendGrid/Mailgun/SES) in the extension
+- Set `FIREBASE_EMAIL_ENABLED=true` in `.env` and provide a service account via one of `FIREBASE_SERVICE_ACCOUNT_*`
+- The app writes notifications to Firestore `mail` with `to`, `replyTo`, and `message.subject/html`
 
 For links in notification emails to open from other PCs, set `BASE_URL` to your machine’s LAN URL and ensure firewall allows the chosen `PORT`.
 

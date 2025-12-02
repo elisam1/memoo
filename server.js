@@ -148,6 +148,10 @@ app.get('/', (req, res) => {
 
 // GET login page
 app.get('/login', (req, res) => {
+  const authEnabled = String(process.env.FIREBASE_AUTH_ENABLED || 'false').toLowerCase() === 'true';
+  if (authEnabled) {
+    return res.render('login', { title: 'Login', error: 'Firebase Auth is enabled. Use Firebase sign-in.' });
+  }
   res.render('login', { title: 'Login', error: null });
 });
 
@@ -158,8 +162,10 @@ app.get('/signup', (req, res) => {
 
 // POST login
 app.post('/login', async (req, res) => {
+  const authEnabled = String(process.env.FIREBASE_AUTH_ENABLED || 'false').toLowerCase() === 'true';
+  if (authEnabled) return res.status(404).send('Local login disabled. Use Firebase sign-in.');
   const { email, password } = req.body;
-  const users = store.getUsers();
+  const users = await store.listUsersAsync();
   const user = users.find(u => u.email === email.trim().toLowerCase());
 
   if (!user) {
@@ -197,6 +203,8 @@ app.post('/login', async (req, res) => {
 // Establish session via Firebase ID token (client-side auth)
 app.post('/sessionLogin', async (req, res) => {
   try {
+    const authEnabled = String(process.env.FIREBASE_AUTH_ENABLED || 'false').toLowerCase() === 'true';
+    if (!authEnabled) return res.status(404).send('Firebase Auth disabled on server');
     const idToken = req.body.idToken;
     const requestedRole = (req.body.role || '').trim().toLowerCase();
     if (!idToken) return res.status(400).send('Missing idToken');
@@ -212,7 +220,7 @@ app.post('/sessionLogin', async (req, res) => {
       return res.status(403).send('Your email domain is not configured. Please contact admin to add your company domain.');
     }
 
-    const users = store.getUsers();
+    const users = await store.listUsersAsync();
     let user = users.find(u => u.email === email);
 
   if (!user) {
@@ -240,8 +248,7 @@ app.post('/sessionLogin', async (req, res) => {
     }
 
       user = { email, role: requestedRole, password: null };
-      users.push(user);
-      store.saveUsers(users);
+      await store.saveUserAsync(user);
     }
 
     // Ignore requested role on login for existing users; server is the source of truth
@@ -253,7 +260,7 @@ app.post('/sessionLogin', async (req, res) => {
     if (msg.includes('Firebase Admin not initialized')) {
       return res.status(500).send('Server auth not configured: set Firebase service account in .env');
     }
-    res.status(401).send('Invalid or expired token.');
+    res.status(401).send('Invalid or expired token. Check Firebase project mismatch or clock skew.');
   }
 });
 
@@ -264,6 +271,10 @@ app.post('/sessionLogout', (req, res) => {
 // POST signup
 app.post('/signup', async (req, res) => {
   try {
+    const authEnabled = String(process.env.FIREBASE_AUTH_ENABLED || 'false').toLowerCase() === 'true';
+    if (authEnabled) {
+      return res.render('signup', { title: 'Signup', error: 'Firebase Auth is enabled. Create account via Firebase and use session login.' });
+    }
     let { email, password, role, passwordConfirm } = req.body;
     email = (email || '').trim().toLowerCase();
     role = (role || '').trim().toLowerCase();
@@ -288,7 +299,7 @@ app.post('/signup', async (req, res) => {
       return res.render('signup', { title: 'Signup', error: 'Your email domain is not configured. Please contact admin to add your company domain.' });
     }
 
-    const users = store.getUsers();
+    const users = await store.listUsersAsync();
     const existing = users.find(u => u.email === email);
     if (existing) {
       return res.render('signup', { title: 'Signup', error: 'An account already exists for this email.' });
@@ -314,8 +325,7 @@ app.post('/signup', async (req, res) => {
 
     const hash = await bcrypt.hash(password, 10);
     const newUser = { email, password: hash, role };
-    users.push(newUser);
-    store.saveUsers(users);
+    await store.saveUserAsync(newUser);
 
     // Auto login after signup
     req.session.user = newUser;
@@ -337,17 +347,17 @@ app.get('/home', requireLogin, (req, res) => {
 });
 
 // HR Dashboard
-app.get('/hr', requireLogin, (req, res) => {
+app.get('/hr', requireLogin, async (req, res) => {
   if (req.session.user.role !== 'hr') return res.status(403).render('forbidden', { title: 'Access Restricted', roleRequired: 'hr', user: req.session.user });
 
-  const db = store.get();
   const statusFilter = (req.query.status || '').trim().toLowerCase();
-  let memos = db.memos.filter((m) => m.hrEmail === req.session.user.email);
+  let memos = await store.listMemosByHrAsync(req.session.user.email);
   if (['open', 'waiting', 'closed'].includes(statusFilter)) {
     memos = memos.filter((m) => (m.status || 'open') === statusFilter);
   }
   memos = memos.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  res.render('hr', { title: 'HR Dashboard', memos, statusFilter, user: req.session.user });
+  const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+  res.render('hr', { title: 'HR Dashboard', memos, statusFilter, user: req.session.user, baseUrl });
 });
 
 // Create Memo
@@ -386,9 +396,7 @@ app.post('/hr/memo', requireLogin, upload.single('file'), async (req, res) => {
       };
     } catch (_) {}
 
-    const db = store.get();
-    db.memos.push(memo);
-    store.save(db);
+    await store.addMemoAsync(memo);
 
     const companyConfig = getCompanyByEmail(hrEmail);
     if (companyConfig) {
@@ -410,7 +418,7 @@ app.post('/hr/memo', requireLogin, upload.single('file'), async (req, res) => {
 });
 
 // Update Memo Status
-app.post('/hr/memo/:id/status', requireLogin, (req, res) => {
+app.post('/hr/memo/:id/status', requireLogin, async (req, res) => {
   if (req.session.user.role !== 'hr') return res.status(403).send('Forbidden');
 
   const { id } = req.params;
@@ -418,23 +426,20 @@ app.post('/hr/memo/:id/status', requireLogin, (req, res) => {
   const allowed = ['open', 'waiting', 'closed'];
   if (!allowed.includes((status || '').toLowerCase())) return res.status(400).send('Invalid status');
 
-  const db = store.get();
-  const memo = db.memos.find((m) => m.id === id);
+  const memo = await store.getMemoByIdAsync(id);
   if (!memo) return res.status(404).send('Memo not found');
 
-  memo.status = status.toLowerCase();
-  store.save(db);
+  await store.updateMemoStatusAsync(id, status.toLowerCase());
   res.redirect('/hr');
 });
 
 // Manager Dashboard
-app.get('/manager', requireLogin, (req, res) => {
+app.get('/manager', requireLogin, async (req, res) => {
   if (req.session.user.role !== 'manager') return res.status(403).render('forbidden', { title: 'Access Restricted', roleRequired: 'manager', user: req.session.user });
 
   const email = req.session.user.email;
-  const db = store.get();
   const statusFilter = (req.query.status || '').trim().toLowerCase();
-  let memos = db.memos.filter((m) => m.managerEmail === email);
+  let memos = await store.listMemosByManagerAsync(email);
   if (['open', 'waiting', 'closed'].includes(statusFilter)) {
     memos = memos.filter((m) => (m.status || 'open') === statusFilter);
   }
@@ -446,8 +451,7 @@ app.get('/memo/:id', requireLogin, async (req, res) => {
   const { id } = req.params;
   const viewerEmail = req.session.user.email;
   const prefillMessage = (req.query.prefill || '').toString();
-  const db = store.get();
-  const memo = db.memos.find((m) => m.id === id);
+  const memo = await store.getMemoByIdAsync(id);
   if (!memo) return res.status(404).send('Memo not found');
   if (viewerEmail !== memo.managerEmail && viewerEmail !== memo.hrEmail) {
     return res.status(403).render('forbidden', { title: 'Access Restricted', roleRequired: null, user: req.session.user });
@@ -487,11 +491,10 @@ app.get('/memo/:id', requireLogin, async (req, res) => {
   res.render('memo', { title: `Memo: ${memo.title}`, memo, docHtml: html, viewerEmail, isManagerViewer, isHRViewer, prefillMessage });
 });
 
-app.get('/memo/:id/download', requireLogin, (req, res) => {
+app.get('/memo/:id/download', requireLogin, async (req, res) => {
   const { id } = req.params;
   const viewerEmail = req.session.user.email;
-  const db = store.get();
-  const memo = db.memos.find((m) => m.id === id);
+  const memo = await store.getMemoByIdAsync(id);
   if (!memo) return res.status(404).send('Memo not found');
   if (viewerEmail !== memo.managerEmail && viewerEmail !== memo.hrEmail) {
     return res.status(403).render('forbidden', { title: 'Access Restricted', roleRequired: null, user: req.session.user });
@@ -509,11 +512,10 @@ app.get('/memo/:id/download', requireLogin, (req, res) => {
   return res.status(404).send('Source file not found');
 });
 
-app.get('/memo/:id/file', requireLogin, (req, res) => {
+app.get('/memo/:id/file', requireLogin, async (req, res) => {
   const { id } = req.params;
   const viewerEmail = req.session.user.email;
-  const db = store.get();
-  const memo = db.memos.find((m) => m.id === id);
+  const memo = await store.getMemoByIdAsync(id);
   if (!memo) return res.status(404).send('Memo not found');
   if (viewerEmail !== memo.managerEmail && viewerEmail !== memo.hrEmail) {
     return res.status(403).render('forbidden', { title: 'Access Restricted', roleRequired: null, user: req.session.user });
@@ -540,8 +542,7 @@ app.get('/memo/:id/file', requireLogin, (req, res) => {
 app.post('/memo/:id/reply', requireLogin, async (req, res) => {
   const { id } = req.params;
   const { message } = req.body;
-  const db = store.get();
-  const memo = db.memos.find((m) => m.id === id);
+  const memo = await store.getMemoByIdAsync(id);
   if (!memo) return res.status(404).send('Memo not found');
 
   const senderEmail = req.session.user.email;
@@ -551,8 +552,7 @@ app.post('/memo/:id/reply', requireLogin, async (req, res) => {
   if (!message || !message.trim()) return res.status(400).send('Reply message cannot be empty.');
 
   const reply = { sender: senderRole, email: senderEmail, message: message.trim(), createdAt: new Date().toISOString() };
-  memo.replies.push(reply);
-  store.save(db);
+  await store.addReplyAsync(id, reply);
 
   const companyConfig = getCompanyByEmail(senderRole === 'hr' ? memo.managerEmail : memo.hrEmail);
   if (companyConfig) {
@@ -622,8 +622,8 @@ app.post('/admin/domains/:domain/delete', requireLogin, requireRole('admin'), (r
 });
 
 // --- Admin: Admin users management ---
-app.get('/admin/users', requireLogin, requireRole('admin'), (req, res) => {
-  const users = store.getUsers();
+app.get('/admin/users', requireLogin, requireRole('admin'), async (req, res) => {
+  const users = await store.listUsersAsync();
   const admins = users.filter(u => u.role === 'admin');
   res.render('admin_users', { title: 'Manage Admins', admins, message: null, currentEmail: req.session.user.email, adminMax: parseInt(process.env.ADMIN_MAX || '2', 10) });
 });
@@ -632,12 +632,12 @@ app.post('/admin/admins/add', requireLogin, requireRole('admin'), async (req, re
   try {
     const email = (req.body.email || '').trim().toLowerCase();
     if (!email || !email.includes('@')) {
-      const users = store.getUsers();
+      const users = await store.listUsersAsync();
       const admins = users.filter(u => u.role === 'admin');
       return res.render('admin_users', { title: 'Manage Admins', admins, message: { type: 'error', text: 'Valid admin email is required.' }, currentEmail: req.session.user.email, adminMax: parseInt(process.env.ADMIN_MAX || '2', 10) });
     }
 
-    const users = store.getUsers();
+    const users = await store.listUsersAsync();
     const admins = users.filter(u => u.role === 'admin');
     const ADMIN_MAX = parseInt(process.env.ADMIN_MAX || '2', 10);
     if (admins.length >= ADMIN_MAX) {
@@ -647,22 +647,22 @@ app.post('/admin/admins/add', requireLogin, requireRole('admin'), async (req, re
       return res.render('admin_users', { title: 'Manage Admins', admins, message: { type: 'error', text: 'User already exists.' }, currentEmail: req.session.user.email, adminMax: ADMIN_MAX });
     }
 
-    users.push({ email, role: 'admin', password: null });
-    store.saveUsers(users);
-    const updatedAdmins = users.filter(u => u.role === 'admin');
+    await store.saveUserAsync({ email, role: 'admin', password: null });
+    const updated = await store.listUsersAsync();
+    const updatedAdmins = updated.filter(u => u.role === 'admin');
     res.render('admin_users', { title: 'Manage Admins', admins: updatedAdmins, message: { type: 'success', text: 'Admin added.' }, currentEmail: req.session.user.email, adminMax: ADMIN_MAX });
   } catch (err) {
     console.error('Add admin error:', err);
-    const users = store.getUsers();
+    const users = await store.listUsersAsync();
     const admins = users.filter(u => u.role === 'admin');
     res.render('admin_users', { title: 'Manage Admins', admins, message: { type: 'error', text: 'Failed to add admin.' }, currentEmail: req.session.user.email, adminMax: parseInt(process.env.ADMIN_MAX || '2', 10) });
   }
 });
 
-app.post('/admin/admins/:email/delete', requireLogin, requireRole('admin'), (req, res) => {
+app.post('/admin/admins/:email/delete', requireLogin, requireRole('admin'), async (req, res) => {
   try {
     const target = (req.params.email || '').trim().toLowerCase();
-    let users = store.getUsers();
+    let users = await store.listUsersAsync();
     const admins = users.filter(u => u.role === 'admin');
     const ADMIN_MAX = parseInt(process.env.ADMIN_MAX || '2', 10);
 
@@ -677,48 +677,46 @@ app.post('/admin/admins/:email/delete', requireLogin, requireRole('admin'), (req
       return res.render('admin_users', { title: 'Manage Admins', admins, message: { type: 'error', text: 'At least one admin must remain.' }, currentEmail: req.session.user.email, adminMax: ADMIN_MAX });
     }
 
-    const before = users.length;
-    users = users.filter(u => !(u.role === 'admin' && u.email === target));
-    if (users.length === before) {
+    const exists = users.find(u => u.role === 'admin' && u.email === target);
+    if (!exists) {
       return res.render('admin_users', { title: 'Manage Admins', admins, message: { type: 'error', text: 'Admin not found.' }, currentEmail: req.session.user.email, adminMax: ADMIN_MAX });
     }
-    store.saveUsers(users);
-    const updatedAdmins = users.filter(u => u.role === 'admin');
+    await store.deleteUserAsync(target);
+    const updated = await store.listUsersAsync();
+    const updatedAdmins = updated.filter(u => u.role === 'admin');
     res.render('admin_users', { title: 'Manage Admins', admins: updatedAdmins, message: { type: 'success', text: 'Admin removed.' }, currentEmail: req.session.user.email, adminMax: ADMIN_MAX });
   } catch (err) {
     console.error('Delete admin error:', err);
-    const users = store.getUsers();
+    const users = await store.listUsersAsync();
     const admins = users.filter(u => u.role === 'admin');
     res.render('admin_users', { title: 'Manage Admins', admins, message: { type: 'error', text: 'Failed to remove admin.' }, currentEmail: req.session.user.email, adminMax: parseInt(process.env.ADMIN_MAX || '2', 10) });
   }
 });
 
-app.post('/admin/reset', requireLogin, requireRole('admin'), (req, res) => {
+app.post('/admin/reset', requireLogin, requireRole('admin'), async (req, res) => {
   try {
     const currentEmail = (req.session.user?.email || '').trim().toLowerCase();
-    const users = store.getUsers();
+    const users = await store.listUsersAsync();
     const keep = users.find(u => u.email === currentEmail && u.role === 'admin');
     const kept = keep ? [keep] : [];
 
-    // Clear memos and users (keep current admin if present)
-    store.save({ memos: [] });
-    store.saveUsers(kept);
+    await store.purgeAllAsync();
+    for (const u of kept) { await store.saveUserAsync(u); }
     purgeUploads();
 
     const admins = kept;
     res.render('admin_users', { title: 'Manage Admins', admins, message: { type: 'success', text: 'All memos and users cleared. Current admin retained. Uploads purged.' }, currentEmail: currentEmail, adminMax: parseInt(process.env.ADMIN_MAX || '2', 10) });
   } catch (err) {
     console.error('Reset error:', err);
-    const users = store.getUsers();
+    const users = await store.listUsersAsync();
     const admins = users.filter(u => u.role === 'admin');
     res.render('admin_users', { title: 'Manage Admins', admins, message: { type: 'error', text: 'Failed to reset data.' }, currentEmail: req.session.user.email, adminMax: parseInt(process.env.ADMIN_MAX || '2', 10) });
   }
 });
 
-app.post('/admin/reset-all', requireLogin, requireRole('admin'), (req, res) => {
+app.post('/admin/reset-all', requireLogin, requireRole('admin'), async (req, res) => {
   try {
-    store.save({ memos: [] });
-    store.saveUsers([]);
+    await store.purgeAllAsync();
     purgeUploads();
   } catch (err) {
     console.error('Reset-all error:', err);
